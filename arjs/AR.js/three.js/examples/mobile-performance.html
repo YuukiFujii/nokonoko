@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+<!-- three.js library -->
+<script src='vendor/three.js/build/three.min.js'></script>
+<script src="vendor/three.js/examples/js/libs/stats.min.js"></script>
+<!-- ar.js -->
+<script src="../build/ar.js"></script>
+<script>THREEx.ArToolkitContext.baseURL = '../'</script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+
+<body style='margin : 0px; overflow: hidden; font-family: Monospace;'><div style='position: absolute; top: 10px; width:100%; text-align: center; z-index: 1;'>
+	<a href="https://github.com/jeromeetienne/AR.js/" target="_blank">AR.js</a> - three.js mobile performance
+	<br/>
+	Contact me any time at <a href='https://twitter.com/jerome_etienne' target='_blank'>@jerome_etienne</a>
+</div><script>
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Init
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// init renderer
+	var renderer	= new THREE.WebGLRenderer({
+		// antialias	: true,
+		alpha: true
+	});
+	renderer.setClearColor(new THREE.Color('lightgrey'), 0)
+	// renderer.setPixelRatio( 1/2 );
+	renderer.setSize( window.innerWidth, window.innerHeight );
+	renderer.domElement.style.position = 'absolute'
+	renderer.domElement.style.top = '0px'
+	renderer.domElement.style.left = '0px'
+	document.body.appendChild( renderer.domElement );
+
+	// array of functions for the rendering loop
+	var onRenderFcts= [];
+
+	// init scene and camera
+	var scene	= new THREE.Scene();
+	
+	//////////////////////////////////////////////////////////////////////////////////
+	//		Initialize a basic camera
+	//////////////////////////////////////////////////////////////////////////////////
+
+	// Create a camera
+	var camera = new THREE.Camera();
+	scene.add(camera);
+
+	////////////////////////////////////////////////////////////////////////////////
+	//          handle arToolkitSource
+	////////////////////////////////////////////////////////////////////////////////
+
+	var arToolkitSource = new THREEx.ArToolkitSource({
+		// to read from the webcam 
+		sourceType : 'webcam',
+
+		// to read from an image
+		// sourceType : 'image',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/images/img.jpg',		
+
+		// to read from a video
+		// sourceType : 'video',
+		// sourceUrl : THREEx.ArToolkitContext.baseURL + '../data/videos/headtracking.mp4',		
+	})
+
+	arToolkitSource.init(function onReady(){
+		onResize()
+	})
+	
+	// handle resize
+	window.addEventListener('resize', function(){
+		onResize()
+	})
+	function onResize(){
+		arToolkitSource.onResize()	
+		arToolkitSource.copySizeTo(renderer.domElement)	
+		if( arToolkitContext.arController !== null ){
+			arToolkitSource.copySizeTo(arToolkitContext.arController.canvas)	
+		}	
+	}
+	////////////////////////////////////////////////////////////////////////////////
+	//          initialize arToolkitContext
+	////////////////////////////////////////////////////////////////////////////////
+	
+
+	// create atToolkitContext
+	var arToolkitContext = new THREEx.ArToolkitContext({
+		cameraParametersUrl: THREEx.ArToolkitContext.baseURL + '../data/data/camera_para.dat',
+		detectionMode: 'mono',
+		maxDetectionRate: 30,
+		canvasWidth: 80*3,
+		canvasHeight: 60*3,
+	})
+	// initialize it
+	arToolkitContext.init(function onCompleted(){
+		// copy projection matrix to camera
+		camera.projectionMatrix.copy( arToolkitContext.getProjectionMatrix() );
+	})
+
+	// update artoolkit on every frame
+	onRenderFcts.push(function(){
+		if( arToolkitSource.ready === false )	return
+
+		arToolkitContext.update( arToolkitSource.domElement )
+	})
+	
+	
+	////////////////////////////////////////////////////////////////////////////////
+	//          Create a ArMarkerControls
+	////////////////////////////////////////////////////////////////////////////////
+	
+	var markerRoot = new THREE.Group
+	scene.add(markerRoot)
+	var artoolkitMarker = new THREEx.ArMarkerControls(arToolkitContext, markerRoot, {
+		type : 'pattern',
+		patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.hiro'
+		// patternUrl : THREEx.ArToolkitContext.baseURL + '../data/data/patt.kanji'
+	})
+
+	// build a smoothedControls
+	var smoothedRoot = new THREE.Group()
+	scene.add(smoothedRoot)
+	var smoothedControls = new THREEx.ArSmoothedControls(smoothedRoot, {
+		lerpPosition: 0.4,
+		lerpQuaternion: 0.3,
+		lerpScale: 1,
+	})
+	onRenderFcts.push(function(delta){
+		smoothedControls.update(markerRoot)
+	})
+	//////////////////////////////////////////////////////////////////////////////////
+	//		add an object in the scene
+	//////////////////////////////////////////////////////////////////////////////////
+
+	var arWorldRoot = smoothedRoot
+	var data_array;
+
+	//ライティング
+    var directionalLight_top = new THREE.AmbientLight( 0xffffff, 1 ); //平行光源（色、強度）
+    var directionalLight_bottom = new THREE.DirectionalLight( 0xffffff, 0.1 ); //平行光源（色、強度）
+    directionalLight_top.position.set(0,10000,0);
+    directionalLight_bottom.rotation.set(Math.PI/4,0,0);
+    arWorldRoot.add( directionalLight_top );
+    arWorldRoot.add( directionalLight_bottom );
+
+  	var loader;
+    var mesh_happy;
+    var mesh_smile;
+    var mesh_normal;
+    var mesh_sad;
+
+	function loadCallBackHappy(geometry, materials){
+		mesh_happy	= new THREE.Mesh( geometry, materials );
+       	mesh_happy.rotation.set(-Math.PI/5,Math.PI,0); 
+       	mesh_happy.position.y	= 0.5
+       	mesh_happy.scale.x	= 10
+       	mesh_happy.scale.y	= 10
+       	mesh_happy.scale.z	= 10
+	}
+	function loadCallBackSmile(geometry, materials){
+		mesh_smile	= new THREE.Mesh( geometry, materials );
+       	mesh_smile.rotation.set(Math.PI/8,0,0); 
+       	mesh_smile.position.y	= 0.5
+       	mesh_smile.scale.x	= 10
+       	mesh_smile.scale.y	= 10
+       	mesh_smile.scale.z	= 10
+	}
+
+	function loadCallBackNormal(geometry, materials){
+		mesh_normal	= new THREE.Mesh( geometry, materials );
+       	mesh_normal.rotation.set(Math.PI/8,0,0); 
+       	mesh_normal.position.y	= 0.5
+       	mesh_normal.scale.x	= 10
+       	mesh_normal.scale.y	= 10
+       	mesh_normal.scale.z	= 10
+	}
+
+	function loadCallBackSad(geometry, materials){
+		mesh_sad	= new THREE.Mesh( geometry, materials );
+       	mesh_sad.rotation.set(Math.PI/8,0,0); 
+       	mesh_sad.position.y	= 0.5
+       	mesh_sad.scale.x	= 10
+       	mesh_sad.scale.y	= 10
+       	mesh_sad.scale.z	= 10
+	}
+
+	loader_happy = new THREE.JSONLoader();
+	loader_smile = new THREE.JSONLoader();
+	loader_normal = new THREE.JSONLoader();
+	loader_sad = new THREE.JSONLoader();
+
+	loader_happy.load( '../../../../happy.json', loadCallBackHappy);
+	loader_smile.load( '../../../../smile.json', loadCallBackSmile);
+	loader_normal.load( '../../../../normal.json', loadCallBackNormal);
+	loader_sad.load( '../../../../sad.json', loadCallBackSad);
+
+	onRenderFcts.push(function(){
+
+		// データ取得
+		$(function () {
+  			$.ajax({
+    			url:'../../../../sensor.txt',
+    			success: function(data){
+      				data_array = data.split(",");
+    			}
+  			});
+		});
+
+  		if (data_array[0] == 1 && data_array[1] == 1　&& data_array[2] == 1) {
+  			arWorldRoot.remove( mesh_smile );
+  			arWorldRoot.remove( mesh_normal );
+  			arWorldRoot.remove( mesh_sad );
+  			// 超にっこり
+  			arWorldRoot.add( mesh_happy );
+  	/*	} else if (data_array[0] == 1 && data_array[2] == 1) {
+  			arWorldRoot.remove( mesh_happy );
+  			arWorldRoot.remove( mesh_normal );
+  			arWorldRoot.remove( mesh_sad );
+  			// にっこり
+  			arWorldRoot.add( mesh_smile );
+  		} else if (data_array[0] == 1) {
+  			arWorldRoot.remove( mesh_smile );
+  			arWorldRoot.remove( mesh_happy );
+  			arWorldRoot.remove( mesh_sad );
+  			// 普通
+  			arWorldRoot.add( mesh_normal );*/
+  		} else {
+  			arWorldRoot.remove( mesh_smile );
+  			arWorldRoot.remove( mesh_normal );
+  			arWorldRoot.remove( mesh_happy );
+  			// 泣き
+  			arWorldRoot.add( mesh_sad );
+  		}
+	})
+
+	//////////////////////////////////////////////////////////////////////////////////
+	//		render the whole thing on the page
+	//////////////////////////////////////////////////////////////////////////////////
+	var stats = new Stats();
+	document.body.appendChild( stats.dom );
+	// render the scene
+	onRenderFcts.push(function(){
+		renderer.render( scene, camera );
+		stats.update();
+	})
+
+	// run the rendering loop
+	var lastTimeMsec= null
+	requestAnimationFrame(function animate(nowMsec){
+		// keep looping
+		requestAnimationFrame( animate );
+		// measure time
+		lastTimeMsec	= lastTimeMsec || nowMsec-1000/60
+		var deltaMsec	= Math.min(200, nowMsec - lastTimeMsec)
+		lastTimeMsec	= nowMsec
+		// call each update function
+		onRenderFcts.forEach(function(onRenderFct){
+			onRenderFct(deltaMsec/1000, nowMsec/1000)
+		})
+	})
+</script></body>
